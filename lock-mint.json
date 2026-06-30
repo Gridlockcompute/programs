@@ -1,0 +1,24 @@
+{
+  "mint": "4MXFgtdkjQv3YdVHZVNMYrKtFcHyzDwLJmMQfdkYzVnx",
+  "mintAuthority": "48py5U6vqMLeSX5Q4d7WCWJBP4hh9naTk3vqjzixmxmg",
+  "permanentDelegate": "3sYM1VwzKVW4r6KBKQeCtVqHVTwCk5QNyGcTB6rutMek",
+  "feeCollectorPda": "7vbHFjB4SWoDFbe8aff6Hq8RrtiMEn9ybjyFr4vPiELG",
+  "transferHookProgram": null,
+  "decimals": 9,
+  "cluster": "devnet",
+  "createdAt": "2026-06-22T21:27:22.198Z",
+  "txSig": "2QtLjXUL5cqf1QXMMydEGnELtW7BND8YCu33vnP5won4d82rk32C9uKq6vRLbc1HHMvKvmJcbEKwuTp1YSzBLH91",
+  "vaults": {
+    "feeVault": "5EMpUVkbqyu6G91b6ZWnWxZThRmriE4NiQ2e5PrEyJ5W",
+    "stakerPool": "g1VDBvggZJCWkkbk9rUga1rDByzcAJ1z7ezuFPyBX1o",
+    "workerPayout": "4C7zT3bhw9oS7ideXsmwTa68oSdqFvaKEEbVf4mH3Ch5",
+    "treasury": "9omHTNgn7mJvwS9bNUMTv4ZmDyGwhokajQxMS7SUTAYK",
+    "burnVault": "B2c3f5yyCD8WtVkqYi5TVV1wtLHdqfNPoJM5MuCcYHS6"
+  },
+  "vaultOwner": "7vbHFjB4SWoDFbe8aff6Hq8RrtiMEn9ybjyFr4vPiELG",
+  "seededFeeVaultAmount": "100000000000",
+  "updatedAt": "2026-06-22T21:27:28.137Z",
+  "customerWallet": "7soX5hwnWQa3uYNfcEPertD7pwxe99SvJfugT1L9sC6x",
+  "defaultWorkerStake": "6wvgoqeT5hTH8gmmWTHpKKSTgXSB7eKFtgrQReWkMSgf",
+  "settlementFundedAt": "2026-06-22T22:03:44.896Z"
+}
