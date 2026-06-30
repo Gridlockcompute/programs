@@ -1,0 +1,16 @@
+{
+  "name": "gridlock",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "create-lock-mint": "tsx scripts/create-lock-mint.ts",
+    "init-fee-vaults": "tsx scripts/init-fee-vaults.ts",
+    "init-settlement-accounts": "tsx scripts/init-settlement-accounts.ts"
+  },
+  "devDependencies": {
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.4",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

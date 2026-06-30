@@ -1,0 +1,38 @@
+[toolchain]
+anchor_version = "1.0.2"
+solana_version = "3.1.10"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+fee_collector = "6GoaeiUQC8DaLXSDjd6CPACZZ1rM4xL4VCzxu1iC5xoU"
+governance = "8d4UT2HPvAkmX4JR367nyNVWNqawiqGjN1bBbwtvvFUB"
+job_scheduler = "14ZQ7ubKgrWJRhcuzjmUj733fStgwUpERWXMj6pKuYcT"
+provider_registry = "GvCMygAV4RNYVgPybMmgEb36AkSKEBQJJw45WfUfSfmu"
+sla_enforcer = "3H3yLvY7m7TaGkMSvvkvG9NQT5nDhVLNrZTfywiBaoLJ"
+sla_registry = "5me7JG25p4NH1XCYtxWn9bU5sij8Xos1We5g47TbRxxM"
+
+[programs.localnet]
+fee_collector = "6GoaeiUQC8DaLXSDjd6CPACZZ1rM4xL4VCzxu1iC5xoU"
+governance = "8d4UT2HPvAkmX4JR367nyNVWNqawiqGjN1bBbwtvvFUB"
+job_scheduler = "14ZQ7ubKgrWJRhcuzjmUj733fStgwUpERWXMj6pKuYcT"
+provider_registry = "GvCMygAV4RNYVgPybMmgEb36AkSKEBQJJw45WfUfSfmu"
+sla_enforcer = "3H3yLvY7m7TaGkMSvvkvG9NQT5nDhVLNrZTfywiBaoLJ"
+sla_registry = "5me7JG25p4NH1XCYtxWn9bU5sij8Xos1We5g47TbRxxM"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[provider.devnet]
+url = "https://devnet.helius-rpc.com/?api-key=19d06ab4-7e29-4c81-8fef-2af6f4d51bbe"
+
+[workspace]
+members = ["programs/provider-registry", "programs/job-scheduler", "programs/sla-registry", "programs/sla-enforcer", "programs/fee-collector", "programs/governance"]
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[hooks]
