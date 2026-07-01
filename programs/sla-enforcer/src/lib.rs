@@ -17,11 +17,11 @@ pub mod sla_enforcer {
     use super::*;
 
     pub fn settle_or_penalize(ctx: Context<SettleOrPenalize>, job_id: [u8; 32]) -> Result<()> {
-        let receipt = &ctx.accounts.receipt;
+        let receipt = load_receipt(&ctx.accounts.receipt.to_account_info())?;
         require!(receipt.finalized, ErrorCode::ReceiptNotFinalized);
         require!(receipt.job_id == job_id, ErrorCode::JobIdMismatch);
 
-        let job = &ctx.accounts.job;
+        let job = load_job(&ctx.accounts.job.to_account_info())?;
         require!(job.job_id == job_id, ErrorCode::JobIdMismatch);
 
         let mut penalty_deducted: u64 = 0;
@@ -118,10 +118,12 @@ pub mod sla_enforcer {
     }
 
     pub fn mark_missed(ctx: Context<MarkMissed>, job_id: [u8; 32]) -> Result<()> {
-        let receipt = &mut ctx.accounts.receipt;
+        let receipt_ai = ctx.accounts.receipt.to_account_info();
+        let mut receipt = load_receipt(&receipt_ai)?;
         require!(receipt.job_id == job_id, ErrorCode::JobIdMismatch);
         receipt.sla_met = false;
         receipt.finalized = true;
+        store_receipt(&receipt_ai, &receipt)?;
         emit!(JobAbandoned { job_id });
         Ok(())
     }
@@ -138,20 +140,22 @@ fn settle_job_discriminator() -> [u8; 8] {
 #[derive(Accounts)]
 #[instruction(job_id: [u8; 32])]
 pub struct SettleOrPenalize<'info> {
-    #[account(seeds = [b"sla_enforcer"], bump)]
+    #[account(mut, seeds = [b"sla_enforcer"], bump)]
     pub enforcer_authority: SystemAccount<'info>,
 
+    /// CHECK: SLA Registry receipt PDA (owner verified; deserialized manually).
     #[account(
         mut,
         owner = sla_registry::ID @ ErrorCode::InvalidReceipt,
     )]
-    pub receipt: Account<'info, ReceiptAccount>,
+    pub receipt: UncheckedAccount<'info>,
 
+    /// CHECK: JobScheduler job PDA (owner verified; deserialized manually).
     #[account(
         mut,
         owner = job_scheduler::ID @ ErrorCode::InvalidJob,
     )]
-    pub job: Account<'info, ServingJob>,
+    pub job: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub worker_stake: InterfaceAccount<'info, TokenAccount>,
@@ -159,13 +163,18 @@ pub struct SettleOrPenalize<'info> {
     #[account(mut)]
     pub customer_wallet: InterfaceAccount<'info, TokenAccount>,
 
-    #[account(seeds = [b"job_scheduler"], bump)]
+    #[account(
+        seeds = [b"job_scheduler"],
+        bump,
+        seeds::program = job_scheduler::ID,
+    )]
     pub scheduler_authority: SystemAccount<'info>,
 
     #[account(
         mut,
         seeds = [b"job_escrow", job_id.as_ref()],
         bump,
+        seeds::program = job_scheduler::ID,
         token::mint = lock_mint,
         token::authority = scheduler_authority,
     )]
@@ -186,8 +195,9 @@ pub struct SettleOrPenalize<'info> {
 #[derive(Accounts)]
 pub struct MarkMissed<'info> {
     pub provider_registry: Signer<'info>,
+    /// CHECK: SLA Registry receipt PDA (owner verified; deserialized manually).
     #[account(mut, owner = sla_registry::ID @ ErrorCode::InvalidReceipt)]
-    pub receipt: Account<'info, ReceiptAccount>,
+    pub receipt: UncheckedAccount<'info>,
 }
 
 pub mod sla_registry {
@@ -196,6 +206,85 @@ pub mod sla_registry {
 }
 
 // ── Mirrored state (must match source programs byte-for-byte) ────────────────
+
+/// Devnet SLARegistry layout (pre attestation_hash / full Option fields).
+struct LegacyReceiptAccount {
+    job_id: [u8; 32],
+    sla_tier: String,
+    ttft_ms: u32,
+    tpot_ms: u32,
+    sla_met: bool,
+    confidential: bool,
+    committed_at: i64,
+    finalized: bool,
+    bump: u8,
+}
+
+fn parse_legacy_receipt(data: &[u8]) -> Result<LegacyReceiptAccount> {
+    if data.len() < 138 {
+        return err!(ErrorCode::InvalidReceipt);
+    }
+    let mut offset = 0usize;
+    let mut job_id = [0u8; 32];
+    job_id.copy_from_slice(&data[offset..offset + 32]);
+    offset += 32;
+
+    let tier_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    if offset + tier_len > data.len() {
+        return err!(ErrorCode::InvalidReceipt);
+    }
+    let sla_tier = String::from_utf8(data[offset..offset + tier_len].to_vec())
+        .map_err(|_| error!(ErrorCode::InvalidReceipt))?;
+    offset += tier_len;
+
+    if offset + 4 + 4 + 64 + 1 + 1 + 1 + 1 + 8 + 1 + 1 > data.len() {
+        return err!(ErrorCode::InvalidReceipt);
+    }
+    let ttft_ms = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+    offset += 4;
+    let tpot_ms = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+    offset += 4 + 64; // router_sig
+    offset += 1; // legacy watcher tag
+    let sla_met = data[offset] != 0;
+    offset += 1;
+    let confidential = data[offset] != 0;
+    offset += 2; // legacy padding byte before committed_at
+    let committed_at = i64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+    offset += 8;
+    let finalized = data[offset] != 0;
+    offset += 1;
+    let bump = data[offset];
+
+    Ok(LegacyReceiptAccount {
+        job_id,
+        sla_tier,
+        ttft_ms,
+        tpot_ms,
+        sla_met,
+        confidential,
+        committed_at,
+        finalized,
+        bump,
+    })
+}
+
+fn legacy_to_receipt(legacy: LegacyReceiptAccount) -> ReceiptAccount {
+    ReceiptAccount {
+        job_id: legacy.job_id,
+        sla_tier: legacy.sla_tier,
+        ttft_ms: legacy.ttft_ms,
+        tpot_ms: legacy.tpot_ms,
+        router_sig: [0u8; 64],
+        watcher_sig: None,
+        sla_met: legacy.sla_met,
+        confidential: legacy.confidential,
+        attestation_hash: None,
+        committed_at: legacy.committed_at,
+        finalized: legacy.finalized,
+        bump: legacy.bump,
+    }
+}
 
 #[account]
 pub struct ReceiptAccount {
@@ -267,6 +356,93 @@ fn penalty_for_tier(tier: &str, fee: u64) -> Result<u64> {
         _ => return err!(ErrorCode::UnknownSlaTier),
     };
     Ok(fee * mult_bps / 100)
+}
+
+fn load_receipt(receipt: &AccountInfo) -> Result<ReceiptAccount> {
+    let data = receipt.try_borrow_data()?;
+    let body = &data[8..];
+    let mut modern: &[u8] = body;
+    if let Ok(rec) = ReceiptAccount::try_deserialize(&mut modern) {
+        return Ok(rec);
+    }
+    Ok(legacy_to_receipt(parse_legacy_receipt(body)?))
+}
+
+fn store_receipt(receipt: &AccountInfo, state: &ReceiptAccount) -> Result<()> {
+    let mut data = receipt.try_borrow_mut_data()?;
+    let body = &mut data[8..];
+    let legacy = parse_legacy_receipt(body)?;
+    let mut offset = 32 + 4 + legacy.sla_tier.len() + 4 + 4 + 64 + 1;
+    body[offset] = u8::from(state.sla_met);
+    body[offset + 11] = u8::from(state.finalized);
+    Ok(())
+}
+
+fn load_job(job: &AccountInfo) -> Result<ServingJob> {
+    let data = job.try_borrow_data()?;
+    let body = &data[8..];
+    let mut modern: &[u8] = body;
+    if let Ok(job) = ServingJob::try_deserialize(&mut modern) {
+        return Ok(job);
+    }
+    parse_job_account(body)
+}
+
+fn parse_job_account(data: &[u8]) -> Result<ServingJob> {
+    if data.len() < 32 + 32 + 32 + 4 + 8 + 1 + 1 + 8 + 8 + 8 + 1 {
+        return err!(ErrorCode::InvalidJob);
+    }
+    let mut offset = 0usize;
+    let mut job_id = [0u8; 32];
+    job_id.copy_from_slice(&data[offset..offset + 32]);
+    offset += 32;
+    let customer = Pubkey::try_from(&data[offset..offset + 32])
+        .map_err(|_| error!(ErrorCode::InvalidJob))?;
+    offset += 32;
+    let worker = Pubkey::try_from(&data[offset..offset + 32])
+        .map_err(|_| error!(ErrorCode::InvalidJob))?;
+    offset += 32;
+    let tier_len = u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    if offset + tier_len + 8 + 1 + 1 + 8 + 8 + 8 + 1 > data.len() {
+        return err!(ErrorCode::InvalidJob);
+    }
+    let sla_tier = String::from_utf8(data[offset..offset + tier_len].to_vec())
+        .map_err(|_| error!(ErrorCode::InvalidJob))?;
+    offset += tier_len;
+    let payment_amount = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+    offset += 8;
+    let confidential = data[offset] != 0;
+    offset += 1;
+    let status = match data[offset] {
+        0 => JobStatus::Pending,
+        1 => JobStatus::Active,
+        2 => JobStatus::Settled,
+        3 => JobStatus::Expired,
+        _ => return err!(ErrorCode::InvalidJob),
+    };
+    offset += 1;
+    let opened_at = i64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+    offset += 8;
+    let assigned_at = i64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+    offset += 8;
+    let settled_at = i64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+    offset += 8;
+    let bump = data[offset];
+
+    Ok(ServingJob {
+        job_id,
+        customer,
+        worker,
+        sla_tier,
+        payment_amount,
+        confidential,
+        status,
+        opened_at,
+        assigned_at,
+        settled_at,
+        bump,
+    })
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────

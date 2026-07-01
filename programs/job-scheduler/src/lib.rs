@@ -5,6 +5,11 @@ use anchor_spl::token_interface::{
 
 declare_id!("14ZQ7ubKgrWJRhcuzjmUj733fStgwUpERWXMj6pKuYcT");
 
+pub mod sla_enforcer {
+    use super::*;
+    declare_id!("3H3yLvY7m7TaGkMSvvkvG9NQT5nDhVLNrZTfywiBaoLJ");
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 pub const MAX_JOB_DURATION_SECS: i64 = 300; // 5-minute SLA window max
@@ -253,6 +258,7 @@ pub struct SettleJob<'info> {
     #[account(
         seeds = [b"sla_enforcer"],
         bump,
+        seeds::program = sla_enforcer::ID,
     )]
     pub enforcer_authority: Signer<'info>,
 
