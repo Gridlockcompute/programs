@@ -4,6 +4,8 @@ On-chain Solana programs for the [Gridlock](https://grid-lock.tech) decentralize
 
 **Production API (off-chain router):** [https://api.grid-lock.tech](https://api.grid-lock.tech)
 
+> **Note:** Production billing and worker payouts now use **SOL → off-chain credits**; value staking uses **GRID** (Pump.fun) via a separate on-chain program. These Anchor programs implement the **legacy LOCK** settlement layer and remain available when `SOLANA_SETTLEMENT_ENABLED=true`.
+
 ## What it is
 
 The Gridlock **programs** repo contains six Anchor programs that coordinate trust-minimized settlement between customers, GPU workers, and stakers. The [router](https://github.com/Gridlockcompute/router) submits transactions on behalf of the network when `SOLANA_SETTLEMENT_ENABLED=true`.
